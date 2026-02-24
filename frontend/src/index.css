@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+:root {
+  --bg: 10 14 12;
+  --panel: 14 20 16;
+  --text: 255 255 255;
+  --brand: 163 230 53;
+  --brand-2: 34 197 94;
+}
+
+html, body { height: 100%; }
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--text));
+}

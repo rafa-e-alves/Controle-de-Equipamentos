@@ -1,0 +1,59 @@
+# ===========================
+# Node Modules
+# ===========================
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# ===========================
+# Banco de Dados (SQLite)
+# ===========================
+backend/data/
+*.db
+*.sqlite
+*.sqlite3
+
+# ===========================
+# Variáveis de Ambiente
+# ===========================
+.env
+backend/.env
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+# ===========================
+# Build do Frontend
+# ===========================
+frontend/dist/
+frontend/build/
+
+# ===========================
+# Cache do Vite
+# ===========================
+frontend/node_modules/.vite/
+
+# ===========================
+# Arquivos de Backup
+# ===========================
+*.bak
+frontend/vite.config.ts.bak
+
+# ===========================
+# Logs
+# ===========================
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# ===========================
+# Sistema Operacional
+# ===========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===========================
+# Backup
+# ===========================
+olds/
