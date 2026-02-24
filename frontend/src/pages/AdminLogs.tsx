@@ -13,6 +13,13 @@ type Log = {
   details: string;
 };
 
+const ACTION_STYLES: Record<string, string> = {
+  ENTRADA: "bg-green-500/15 border-green-500/30 text-green-300",
+  SAÍDA: "bg-red-500/15 border-red-500/30 text-red-300",
+  EDIÇÃO: "bg-amber-500/15 border-amber-500/30 text-amber-300",
+  EXCLUSÃO: "bg-zinc-500/15 border-zinc-500/30 text-zinc-300",
+};
+
 export default function AdminLogs({ token }: { token: string }) {
   const [logs, setLogs] = useState<Log[]>([]);
   const [filter, setFilter] = useState<string>("all");
@@ -50,6 +57,14 @@ export default function AdminLogs({ token }: { token: string }) {
     // eslint-disable-next-line
   }, [filter]);
 
+  const filters = [
+    { key: "all", label: "Todos" },
+    { key: "ENTRADA", label: "ENTRADA" },
+    { key: "SAÍDA", label: "SAÍDA" },
+    { key: "EDIÇÃO", label: "EDIÇÃO" },
+    { key: "EXCLUSÃO", label: "EXCLUSÃO" },
+  ];
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
       <div className="mb-6">
@@ -62,24 +77,23 @@ export default function AdminLogs({ token }: { token: string }) {
       {/* Stats */}
       <div className="grid md:grid-cols-4 gap-4 mb-6">
         <Stat label="Total" value={stats.totalLogs} />
-        <Stat label="Entradas" value={stats.totalEntradas} />
-        <Stat label="Saídas" value={stats.totalSaidas} />
-        <Stat label="Edições" value={stats.totalEdicoes} />
+        <Stat label="Entradas" value={stats.totalEntradas} color="text-green-300" />
+        <Stat label="Saídas" value={stats.totalSaidas} color="text-red-300" />
+        <Stat label="Edições" value={stats.totalEdicoes} color="text-amber-300" />
       </div>
 
       {/* Filtros */}
       <div className="flex gap-2 mb-4 flex-wrap">
-        {["all", "ENTRADA", "SAÍDA", "EDIÇÃO", "EXCLUSÃO"].map((f) => (
+        {filters.map((f) => (
           <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-4 py-2 rounded-xl text-sm border transition ${
-              filter === f
+            key={f.key}
+            onClick={() => setFilter(f.key)}
+            className={`px-4 py-2 rounded-xl text-sm border transition ${filter === f.key
                 ? "bg-[rgb(var(--brand))]/25 border-[rgb(var(--brand))]/40"
                 : "bg-white/5 border-white/10 hover:bg-white/10"
-            }`}
+              }`}
           >
-            {f === "all" ? "Todos" : f}
+            {f.label}
           </button>
         ))}
       </div>
@@ -103,27 +117,30 @@ export default function AdminLogs({ token }: { token: string }) {
             </thead>
             <tbody>
               {logs.map((l) => (
-                <tr
-                  key={l.id}
-                  className="border-b border-white/5 hover:bg-white/5"
-                >
+                <tr key={l.id} className="border-b border-white/5 hover:bg-white/5">
                   <td className="px-4 py-3 text-white/70">
                     {new Date(l.created_at).toLocaleString("pt-BR")}
                   </td>
                   <td className="px-4 py-3">{l.user_name}</td>
-                  <td className="px-4 py-3 font-semibold">
-                    {l.action_type}
-                  </td>
                   <td className="px-4 py-3">
-                    {l.item_brand} {l.item_model}
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs border font-semibold ${ACTION_STYLES[l.action_type] || "bg-white/5 border-white/10 text-white/70"
+                        }`}
+                    >
+                      {l.action_type}
+                    </span>
                   </td>
+                  <td className="px-4 py-3">{l.item_brand} {l.item_model}</td>
                   <td className="px-4 py-3">{l.category_name}</td>
                   <td className="px-4 py-3">{l.quantity}</td>
-                  <td className="px-4 py-3 text-white/60">
-                    {l.details}
-                  </td>
+                  <td className="px-4 py-3 text-white/60">{l.details}</td>
                 </tr>
               ))}
+              {logs.length === 0 && (
+                <tr>
+                  <td className="px-4 py-6 text-white/50" colSpan={7}>Nenhum log encontrado.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         )}
@@ -132,11 +149,11 @@ export default function AdminLogs({ token }: { token: string }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
       <div className="text-xs text-white/50">{label}</div>
-      <div className="text-2xl font-bold">{value ?? 0}</div>
+      <div className={`text-2xl font-bold ${color || ""}`}>{value ?? 0}</div>
     </div>
   );
 }

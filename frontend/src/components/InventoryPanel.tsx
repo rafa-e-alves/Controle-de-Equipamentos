@@ -29,6 +29,10 @@ type Stats = {
   usedItems: number;
 };
 
+function plural(n: number, singular: string, plural: string) {
+  return n === 1 ? singular : plural;
+}
+
 export default function InventoryPanel({
   token,
   isAdmin,
@@ -36,7 +40,7 @@ export default function InventoryPanel({
 }: {
   token: string;
   isAdmin: boolean;
-  onDataChanged?: () => void; // ✅ agora é opcional
+  onDataChanged?: () => void;
 }) {
   const onChanged = onDataChanged || (() => {});
 
@@ -48,17 +52,14 @@ export default function InventoryPanel({
 
   const [query, setQuery] = useState("");
 
-  // Saída (admin)
   const [saidaOpen, setSaidaOpen] = useState(false);
   const [saidaItem, setSaidaItem] = useState<Item | null>(null);
 
-  // Create/Edit modal
   const [upsertOpen, setUpsertOpen] = useState(false);
   const [upsertMode, setUpsertMode] = useState<"create" | "edit">("create");
   const [upsertCategory, setUpsertCategory] = useState<{ id: number; name: string } | null>(null);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
 
-  // Delete confirm
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteItem, setDeleteItem] = useState<Item | null>(null);
@@ -84,7 +85,6 @@ export default function InventoryPanel({
     const items = await apiFetch(`/categories/${categoryId}/items`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-
     setCategories((prev) => prev.map((c) => (c.id === categoryId ? { ...c, items } : c)));
   };
 
@@ -146,7 +146,6 @@ export default function InventoryPanel({
     return categories.filter((c) => c.name.toLowerCase().includes(q));
   }, [categories, query]);
 
-  // Admin actions
   const openCreate = (cat: Category) => {
     setUpsertMode("create");
     setUpsertCategory({ id: cat.id, name: cat.name });
@@ -194,7 +193,6 @@ export default function InventoryPanel({
 
   return (
     <>
-      {/* Visão geral */}
       <div className="max-w-6xl mx-auto px-6 pt-6">
         <div className="mb-4">
           <div className="text-2xl font-bold">Visão geral</div>
@@ -211,19 +209,16 @@ export default function InventoryPanel({
           <div className="rounded-2xl border border-[rgb(var(--brand))]/20 bg-[rgb(var(--brand))]/8 p-4">
             <div className="text-xs text-white/60">Total em estoque</div>
             <div className="text-3xl font-bold mt-1">{stats.totalQuantity}</div>
-            <div className="text-xs text-white/40 mt-2">Atualizado via API /stats</div>
           </div>
 
           <div className="rounded-2xl border border-[rgb(var(--brand))]/20 bg-[rgb(var(--brand))]/8 p-4">
             <div className="text-xs text-white/60">Itens novos</div>
             <div className="text-3xl font-bold mt-1">{stats.newItems}</div>
-            <div className="text-xs text-white/40 mt-2">Atualizado via API /stats</div>
           </div>
 
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-4">
             <div className="text-xs text-white/60">Itens usados</div>
             <div className="text-3xl font-bold mt-1">{stats.usedItems}</div>
-            <div className="text-xs text-white/40 mt-2">Atualizado via API /stats</div>
           </div>
         </div>
 
@@ -269,14 +264,14 @@ export default function InventoryPanel({
                     <div>
                       <div className="font-semibold">{c.name}</div>
                       <div className="text-xs text-white/50">
-                        {c.item_count} itens • {c.total_quantity} unidades
+                        {c.item_count} {plural(c.item_count, "item", "itens")} • {c.total_quantity} {plural(c.total_quantity, "unidade", "unidades")}
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
                     <span className="text-xs px-2 py-1 rounded-full bg-white/6 border border-white/10 text-white/70">
-                      {c.total_quantity} un
+                      {c.total_quantity} {plural(c.total_quantity, "un", "un")}
                     </span>
                     <div className="text-sm text-white/60">{c.expanded ? "▲" : "▼"}</div>
                   </div>
@@ -330,19 +325,14 @@ export default function InventoryPanel({
                               <td className="px-5 py-3 font-semibold">{it.quantity}</td>
                               <td className="px-5 py-3">
                                 <div className="flex flex-wrap gap-2">
-                                  {/* ✅ SAÍDA SÓ ADMIN */}
                                   {isAdmin && (
                                     <button
-                                      onClick={() => {
-                                        setSaidaItem(it);
-                                        setSaidaOpen(true);
-                                      }}
+                                      onClick={() => { setSaidaItem(it); setSaidaOpen(true); }}
                                       className="px-3 py-1.5 rounded-lg bg-orange-500/15 border border-orange-500/30 text-orange-200 hover:bg-orange-500/25 transition text-xs"
                                     >
                                       Saída
                                     </button>
                                   )}
-
                                   {isAdmin && (
                                     <>
                                       <button
@@ -351,7 +341,6 @@ export default function InventoryPanel({
                                       >
                                         Editar
                                       </button>
-
                                       <button
                                         onClick={() => askDelete(it)}
                                         className="px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-200 hover:bg-red-500/25 transition text-xs"
@@ -360,11 +349,8 @@ export default function InventoryPanel({
                                       </button>
                                     </>
                                   )}
-
                                   {!isAdmin && (
-                                    <span className="text-xs text-white/40">
-                                      Somente visualização
-                                    </span>
+                                    <span className="text-xs text-white/40">Somente visualização</span>
                                   )}
                                 </div>
                               </td>
@@ -377,7 +363,7 @@ export default function InventoryPanel({
 
                   {!isAdmin && (
                     <div className="px-5 py-4 text-xs text-white/40">
-                      Você está como usuário. Funções administrativas (entrada/saída/edição) ficam disponíveis apenas para Admin.
+                      Você está como usuário. Funções administrativas ficam disponíveis apenas para Admin.
                     </div>
                   )}
                 </div>
@@ -387,7 +373,6 @@ export default function InventoryPanel({
         </div>
       </div>
 
-      {/* Modais */}
       <SaidaModal
         open={saidaOpen}
         onClose={() => setSaidaOpen(false)}
@@ -410,7 +395,7 @@ export default function InventoryPanel({
       <ConfirmModal
         open={deleteOpen}
         title="Remover item?"
-        description={`Essa ação remove o item do inventário. (O log é registrado.)`}
+        description="Essa ação remove o item do inventário. (O log é registrado.)"
         confirmText="Remover"
         danger
         busy={deleteBusy}
