@@ -142,11 +142,11 @@ export default function ItemUpsertModal({
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-[rgb(var(--brand))]/60"
+                className="w-full px-4 py-2.5 rounded-xl bg-zinc-900 text-white border border-white/10 focus:outline-none focus:ring-2 focus:ring-[rgb(var(--brand))]/60"
               >
-                <option value="Com fio">Com fio</option>
-                <option value="Sem fio">Sem fio</option>
-                <option value="N/A">N/A</option>
+                <option className="bg-zinc-900 text-white" value="Com fio">Com fio</option>
+                <option className="bg-zinc-900 text-white" value="Sem fio">Sem fio</option>
+                <option className="bg-zinc-900 text-white" value="N/A">N/A</option>
               </select>
             </Field>
 
@@ -154,10 +154,10 @@ export default function ItemUpsertModal({
               <select
                 value={condition}
                 onChange={(e) => setCondition(e.target.value as any)}
-                className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-[rgb(var(--brand))]/60"
+                className="w-full px-4 py-2.5 rounded-xl bg-zinc-900 text-white border border-white/10 focus:outline-none focus:ring-2 focus:ring-[rgb(var(--brand))]/60"
               >
-                <option value="Novo">Novo</option>
-                <option value="Usado">Usado</option>
+                <option className="bg-zinc-900 text-white" value="Novo">Novo</option>
+                <option className="bg-zinc-900 text-white" value="Usado">Usado</option>
               </select>
             </Field>
           </div>

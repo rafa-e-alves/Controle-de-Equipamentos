@@ -10,19 +10,20 @@ type User = {
   active: number;
 };
 
+type FormErrors = {
+  username?: string;
+  name?: string;
+  password?: string;
+};
+
 export default function AdminUsers({ token }: { token: string }) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [showDisabled, setShowDisabled] = useState(true);
 
   // Create
-  const [form, setForm] = useState({
-    username: "",
-    name: "",
-    role: "user",
-    password: "",
-  });
+  const [form, setForm] = useState({ username: "", name: "", role: "user", password: "" });
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
 
   // Edit modal
   const [editOpen, setEditOpen] = useState(false);
@@ -47,22 +48,19 @@ export default function AdminUsers({ token }: { token: string }) {
     }
   };
 
-  useEffect(() => {
-    loadUsers();
-    // eslint-disable-next-line
-  }, []);
-
-  useEffect(() => {
-    loadUsers(showDisabled);
-    // eslint-disable-next-line
-  }, [showDisabled]);
+  useEffect(() => { loadUsers(); }, []);
+  useEffect(() => { loadUsers(showDisabled); }, [showDisabled]);
 
   // Create
   const createUser = async () => {
-    if (!form.username.trim() || !form.name.trim() || !form.password.trim()) {
-      alert("Preencha username, nome e senha.");
-      return;
-    }
+    const errors: FormErrors = {};
+    if (!form.username.trim()) errors.username = "Username é obrigatório.";
+    if (!form.name.trim()) errors.name = "Nome é obrigatório.";
+    if (!form.password.trim()) errors.password = "Senha é obrigatória.";
+    else if (form.password.trim().length < 4) errors.password = "Mínimo 4 caracteres.";
+
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     await apiFetch("/users", {
       method: "POST",
@@ -71,6 +69,7 @@ export default function AdminUsers({ token }: { token: string }) {
     });
 
     setForm({ username: "", name: "", role: "user", password: "" });
+    setFormErrors({});
     loadUsers();
   };
 
@@ -78,43 +77,24 @@ export default function AdminUsers({ token }: { token: string }) {
   const disableUser = async (u: User) => {
     const ok = confirm(`Desativar "${u.username}"? Ele não conseguirá logar.`);
     if (!ok) return;
-
-    await apiFetch(`/users/${u.id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
+    await apiFetch(`/users/${u.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
     loadUsers();
   };
 
   const enableUser = async (u: User) => {
     const ok = confirm(`Reativar "${u.username}"?`);
     if (!ok) return;
-
-    await apiFetch(`/users/${u.id}/enable`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
+    await apiFetch(`/users/${u.id}/enable`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
     loadUsers();
   };
 
-  // Hard delete
   const hardDeleteUser = async (u: User) => {
-    const ok = confirm(
-      `EXCLUIR DEFINITIVAMENTE "${u.username}"?\n\nSó funciona se ele não tiver logs.\nRecomendado apenas para testes.`
-    );
+    const ok = confirm(`EXCLUIR DEFINITIVAMENTE "${u.username}"?\n\nSó funciona se ele não tiver logs.`);
     if (!ok) return;
-
     try {
-      await apiFetch(`/users/${u.id}/hard`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
+      await apiFetch(`/users/${u.id}/hard`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       loadUsers();
-    } catch (e: any) {
-      // apiFetch já loga; aqui só dá feedback simples
+    } catch {
       alert("Não foi possível excluir. Se ele tiver logs, use Desativar.");
     }
   };
@@ -132,13 +112,11 @@ export default function AdminUsers({ token }: { token: string }) {
       alert("Username e Nome são obrigatórios.");
       return;
     }
-
     await apiFetch(`/users/${editUser.id}`, {
       method: "PUT",
       headers: { Authorization: `Bearer ${token}` },
       body: JSON.stringify(editForm),
     });
-
     setEditOpen(false);
     setEditUser(null);
     loadUsers();
@@ -157,13 +135,11 @@ export default function AdminUsers({ token }: { token: string }) {
       alert("Senha inválida (mínimo 4 caracteres).");
       return;
     }
-
     await apiFetch(`/users/${passUser.id}/reset-password`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: JSON.stringify({ password: newPass }),
     });
-
     setPassOpen(false);
     setPassUser(null);
   };
@@ -215,72 +191,40 @@ export default function AdminUsers({ token }: { token: string }) {
                   <th className="px-4 py-3 text-left">Ações</th>
                 </tr>
               </thead>
-
               <tbody>
                 {users.map((u) => {
                   const isActive = Number(u.active) === 1;
-
                   return (
-                    <tr
-                      key={u.id}
-                      className={`border-b border-white/5 hover:bg-white/5 ${
-                        !isActive ? "opacity-70" : ""
-                      }`}
-                    >
+                    <tr key={u.id} className={`border-b border-white/5 hover:bg-white/5 ${!isActive ? "opacity-70" : ""}`}>
                       <td className="px-4 py-3 text-white/60">{u.id}</td>
                       <td className="px-4 py-3 font-semibold">{u.username}</td>
                       <td className="px-4 py-3">{u.name}</td>
                       <td className="px-4 py-3 text-white/70">{u.role}</td>
-
                       <td className="px-4 py-3">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs border ${
-                            isActive
-                              ? "bg-[rgb(var(--brand))]/12 border-[rgb(var(--brand))]/25 text-[rgb(var(--brand))]"
-                              : "bg-red-500/10 border-red-500/25 text-red-200"
-                          }`}
-                        >
+                        <span className={`px-2 py-1 rounded-full text-xs border ${isActive
+                          ? "bg-[rgb(var(--brand))]/12 border-[rgb(var(--brand))]/25 text-[rgb(var(--brand))]"
+                          : "bg-red-500/10 border-red-500/25 text-red-200"}`}>
                           {isActive ? "Ativo" : "Desativado"}
                         </span>
                       </td>
-
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => openEdit(u)}
-                            className="px-3 py-1.5 rounded-lg bg-white/6 border border-white/10 text-white/80 text-xs hover:bg-white/10"
-                          >
+                          <button onClick={() => openEdit(u)} className="px-3 py-1.5 rounded-lg bg-white/6 border border-white/10 text-white/80 text-xs hover:bg-white/10">
                             Editar
                           </button>
-
-                          <button
-                            onClick={() => openResetPass(u)}
-                            className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-200 text-xs hover:bg-amber-500/20"
-                          >
+                          <button onClick={() => openResetPass(u)} className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-200 text-xs hover:bg-amber-500/20">
                             Senha
                           </button>
-
                           {isActive ? (
-                            <button
-                              onClick={() => disableUser(u)}
-                              className="px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-200 text-xs hover:bg-red-500/25"
-                            >
+                            <button onClick={() => disableUser(u)} className="px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-200 text-xs hover:bg-red-500/25">
                               Desativar
                             </button>
                           ) : (
                             <>
-                              <button
-                                onClick={() => enableUser(u)}
-                                className="px-3 py-1.5 rounded-lg bg-[rgb(var(--brand))]/20 border border-[rgb(var(--brand))]/30 text-[rgb(var(--brand))] text-xs hover:bg-[rgb(var(--brand))]/28"
-                              >
+                              <button onClick={() => enableUser(u)} className="px-3 py-1.5 rounded-lg bg-[rgb(var(--brand))]/20 border border-[rgb(var(--brand))]/30 text-[rgb(var(--brand))] text-xs hover:bg-[rgb(var(--brand))]/28">
                                 Reativar
                               </button>
-
-                              <button
-                                onClick={() => hardDeleteUser(u)}
-                                className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/35 text-red-200 text-xs hover:bg-red-500/30"
-                                title="Exclui definitivamente (apenas se não tiver logs)"
-                              >
+                              <button onClick={() => hardDeleteUser(u)} className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/35 text-red-200 text-xs hover:bg-red-500/30" title="Exclui definitivamente (apenas se não tiver logs)">
                                 Excluir
                               </button>
                             </>
@@ -290,12 +234,9 @@ export default function AdminUsers({ token }: { token: string }) {
                     </tr>
                   );
                 })}
-
                 {users.length === 0 && (
                   <tr>
-                    <td className="px-4 py-6 text-white/50" colSpan={6}>
-                      Nenhum usuário para exibir.
-                    </td>
+                    <td className="px-4 py-6 text-white/50" colSpan={6}>Nenhum usuário para exibir.</td>
                   </tr>
                 )}
               </tbody>
@@ -303,40 +244,49 @@ export default function AdminUsers({ token }: { token: string }) {
           )}
         </div>
 
-        {/* Form */}
+        {/* Form Criar */}
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
           <h2 className="font-semibold mb-4">Criar usuário</h2>
-
           <div className="space-y-3">
-            <Input label="Username" value={form.username} onChange={(v) => setForm({ ...form, username: v })} />
-            <Input label="Nome" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
-
+            <Input
+              label="Username"
+              value={form.username}
+              onChange={(v) => { setForm({ ...form, username: v }); setFormErrors((e) => ({ ...e, username: undefined })); }}
+              onKeyDown={(e) => e.key === "Enter" && createUser()}
+              error={formErrors.username}
+            />
+            <Input
+              label="Nome"
+              value={form.name}
+              onChange={(v) => { setForm({ ...form, name: v }); setFormErrors((e) => ({ ...e, name: undefined })); }}
+              onKeyDown={(e) => e.key === "Enter" && createUser()}
+              error={formErrors.name}
+            />
             <div>
-              <div className="text-xs text-white/50 mb-1">Role</div>
+              <div className="text-xs text-white/50 mb-1">Perfil</div>
               <select
                 value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 focus:outline-none"
+                className="w-full px-4 py-2.5 rounded-xl bg-white/5 text-white border border-white/10 focus:outline-none"
               >
-                <option value="user">Usuário</option>
-                <option value="admin">Admin</option>
+                <option className="bg-zinc-900 text-white" value="user">Usuário</option>
+                <option className="bg-zinc-900 text-white" value="admin">Admin</option>
               </select>
             </div>
-
             <Input
               label="Senha"
               type="password"
               value={form.password}
-              onChange={(v) => setForm({ ...form, password: v })}
+              onChange={(v) => { setForm({ ...form, password: v }); setFormErrors((e) => ({ ...e, password: undefined })); }}
+              error={formErrors.password}
+              onKeyDown={(e) => e.key === "Enter" && createUser()}
             />
-
             <button
               onClick={createUser}
               className="w-full px-4 py-2.5 rounded-xl bg-[rgb(var(--brand))]/25 border border-[rgb(var(--brand))]/40 text-sm font-semibold hover:bg-[rgb(var(--brand))]/32 transition"
             >
               Criar
             </button>
-
             <p className="text-xs text-white/40 pt-2">
               Excluir definitivo só aparece quando o usuário estiver desativado e sem logs.
             </p>
@@ -355,13 +305,12 @@ export default function AdminUsers({ token }: { token: string }) {
               <select
                 value={editForm.role}
                 onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 focus:outline-none"
+                className="w-full px-4 py-2.5 rounded-xl bg-white/5 text-white border border-white/10 focus:outline-none"
               >
-                <option value="user">Usuário</option>
-                <option value="admin">Admin</option>
+                <option className="bg-zinc-900 text-white" value="user">Usuário</option>
+                <option className="bg-zinc-900 text-white" value="admin">Admin</option>
               </select>
             </div>
-
             <button
               onClick={saveEdit}
               className="w-full px-4 py-2.5 rounded-xl bg-[rgb(var(--brand))]/25 border border-[rgb(var(--brand))]/40 text-sm font-semibold hover:bg-[rgb(var(--brand))]/32 transition"
@@ -376,7 +325,13 @@ export default function AdminUsers({ token }: { token: string }) {
       {passOpen && passUser && (
         <Modal title={`Resetar senha: ${passUser.username}`} onClose={() => setPassOpen(false)}>
           <div className="space-y-3">
-            <Input label="Nova senha" type="password" value={newPass} onChange={(v) => setNewPass(v)} />
+            <Input
+              label="Nova senha"
+              type="password"
+              value={newPass}
+              onChange={(v) => setNewPass(v)}
+              onKeyDown={(e) => e.key === "Enter" && saveResetPass()}
+            />
             <button
               onClick={saveResetPass}
               className="w-full px-4 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-100 text-sm font-semibold hover:bg-amber-500/25 transition"
@@ -384,7 +339,7 @@ export default function AdminUsers({ token }: { token: string }) {
               Atualizar senha
             </button>
             <p className="text-xs text-white/40">
-              Dica: use algo temporário e peça para o usuário trocar depois (se quiser, a gente implementa “trocar minha senha”).
+              Dica: use algo temporário e peça para o usuário trocar depois.
             </p>
           </div>
         </Modal>
@@ -398,11 +353,15 @@ function Input({
   value,
   onChange,
   type = "text",
+  error,
+  onKeyDown,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
+  error?: string;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }) {
   return (
     <div>
@@ -411,8 +370,13 @@ function Input({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 focus:outline-none"
+        onKeyDown={onKeyDown}
+        className={`w-full px-4 py-2.5 rounded-xl bg-white/5 border focus:outline-none transition ${error
+            ? "border-red-500/70 focus:ring-2 focus:ring-red-500/40"
+            : "border-white/10 focus:ring-2 focus:ring-[rgb(var(--brand))]/40"
+          }`}
       />
+      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
     </div>
   );
 }
