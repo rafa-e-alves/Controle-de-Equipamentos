@@ -54,7 +54,7 @@ export default function AdminUsers({ token }: { token: string }) {
   // Create
   const createUser = async () => {
     const errors: FormErrors = {};
-    if (!form.username.trim()) errors.username = "Username é obrigatório.";
+    if (!form.username.trim()) errors.username = "Usuário é obrigatório.";
     if (!form.name.trim()) errors.name = "Nome é obrigatório.";
     if (!form.password.trim()) errors.password = "Senha é obrigatória.";
     else if (form.password.trim().length < 4) errors.password = "Mínimo 4 caracteres.";
@@ -75,27 +75,27 @@ export default function AdminUsers({ token }: { token: string }) {
 
   // Disable / Enable
   const disableUser = async (u: User) => {
-    const ok = confirm(`Desativar "${u.username}"? Ele não conseguirá logar.`);
+    const ok = confirm(`Certeza que deseja desativar o usuário "${u.username}"? \nO mesmo não terá mais acesso ao sistema.`);
     if (!ok) return;
     await apiFetch(`/users/${u.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
     loadUsers();
   };
 
   const enableUser = async (u: User) => {
-    const ok = confirm(`Reativar "${u.username}"?`);
+    const ok = confirm(`Deseja reativar o usuário "${u.username}"?`);
     if (!ok) return;
     await apiFetch(`/users/${u.id}/enable`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
     loadUsers();
   };
 
   const hardDeleteUser = async (u: User) => {
-    const ok = confirm(`EXCLUIR DEFINITIVAMENTE "${u.username}"?\n\nSó funciona se ele não tiver logs.`);
+    const ok = confirm(`Certeza que deseja excluir DEFINITIVAMENTE o usuário "${u.username}"?\n\nA exclusão só será realizada caso o usuário não possua logs registradas no sistema.`);
     if (!ok) return;
     try {
       await apiFetch(`/users/${u.id}/hard`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       loadUsers();
     } catch {
-      alert("Não foi possível excluir. Se ele tiver logs, use Desativar.");
+      alert(`Por segurança não é possível excluir o usuário "${u.username}".\n\nO mesmo possui logs registradas no sistema.`);
     }
   };
 
@@ -109,7 +109,7 @@ export default function AdminUsers({ token }: { token: string }) {
   const saveEdit = async () => {
     if (!editUser) return;
     if (!editForm.username.trim() || !editForm.name.trim()) {
-      alert("Username e Nome são obrigatórios.");
+      alert("Usuário e Nome são obrigatórios.");
       return;
     }
     await apiFetch(`/users/${editUser.id}`, {
@@ -186,7 +186,7 @@ export default function AdminUsers({ token }: { token: string }) {
                   <th className="px-4 py-3 text-left">ID</th>
                   <th className="px-4 py-3 text-left">Usuário</th>
                   <th className="px-4 py-3 text-left">Nome</th>
-                  <th className="px-4 py-3 text-left">Role</th>
+                  <th className="px-4 py-3 text-left">Perfil</th>
                   <th className="px-4 py-3 text-left">Status</th>
                   <th className="px-4 py-3 text-left">Ações</th>
                 </tr>
@@ -249,7 +249,7 @@ export default function AdminUsers({ token }: { token: string }) {
           <h2 className="font-semibold mb-4">Criar usuário</h2>
           <div className="space-y-3">
             <Input
-              label="Username"
+              label="Usuário"
               value={form.username}
               onChange={(v) => { setForm({ ...form, username: v }); setFormErrors((e) => ({ ...e, username: undefined })); }}
               onKeyDown={(e) => e.key === "Enter" && createUser()}
@@ -288,7 +288,7 @@ export default function AdminUsers({ token }: { token: string }) {
               Criar
             </button>
             <p className="text-xs text-white/40 pt-2">
-              Excluir definitivo só aparece quando o usuário estiver desativado e sem logs.
+              Para a exclusão de um usuário, primeiro é necessário desativá-lo.
             </p>
           </div>
         </div>
@@ -298,7 +298,7 @@ export default function AdminUsers({ token }: { token: string }) {
       {editOpen && editUser && (
         <Modal title={`Editar: ${editUser.username}`} onClose={() => setEditOpen(false)}>
           <div className="space-y-3">
-            <Input label="Username" value={editForm.username} onChange={(v) => setEditForm({ ...editForm, username: v })} />
+            <Input label="Usuário" value={editForm.username} onChange={(v) => setEditForm({ ...editForm, username: v })} />
             <Input label="Nome" value={editForm.name} onChange={(v) => setEditForm({ ...editForm, name: v })} />
             <div>
               <div className="text-xs text-white/50 mb-1">Role</div>
@@ -339,7 +339,7 @@ export default function AdminUsers({ token }: { token: string }) {
               Atualizar senha
             </button>
             <p className="text-xs text-white/40">
-              Dica: use algo temporário e peça para o usuário trocar depois.
+              Lembre-se de informar o usuário a nova senha.
             </p>
           </div>
         </Modal>

@@ -3,6 +3,7 @@ import { apiFetch } from "../lib/api";
 import SaidaModal from "./SaidaModal";
 import ItemUpsertModal from "./ItemUpsertModal";
 import ConfirmModal from "./ConfirmModal";
+import { ToastContainer, useToast } from "./Toast";
 
 type Category = {
   id: number;
@@ -33,6 +34,33 @@ function plural(n: number, singular: string, plural: string) {
   return n === 1 ? singular : plural;
 }
 
+async function exportInventoryCSV(token: string, categories: Category[]) {
+  const escape = (s: string) => (s ?? "").replace(/"/g, "'");
+  const header = ["Categoria", "Marca", "Modelo", "Tipo", "Condicao", "Quantidade"];
+  const rows: string[][] = [];
+  for (const cat of categories) {
+    let items = cat.items;
+    if (items.length === 0 && cat.item_count > 0) {
+      items = await apiFetch("/categories/" + String(cat.id) + "/items", {
+        headers: { Authorization: "Bearer " + token },
+      });
+    }
+    for (const it of items) {
+      rows.push([cat.name, it.brand, it.model, it.type, it.condition, String(it.quantity)]);
+    }
+  }
+  const csv = [header, ...rows]
+    .map((row) => row.map((cell) => '"' + escape(cell) + '"').join(";"))
+    .join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "inventario_" + new Date().toISOString().slice(0, 10) + ".csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function InventoryPanel({
   token,
   isAdmin,
@@ -43,6 +71,8 @@ export default function InventoryPanel({
   onDataChanged?: () => void;
 }) {
   const onChanged = onDataChanged || (() => {});
+  const { toasts, show: showToast, remove: removeToast } = useToast();
+  const [exporting, setExporting] = useState(false);
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,6 +163,18 @@ export default function InventoryPanel({
     onChanged();
   };
 
+const handleExport = async () => {
+  setExporting(true);
+  try {
+    await exportInventoryCSV(token, categories);
+    showToast("Inventário exportado!");
+  } catch {
+    showToast("Erro ao exportar.", "error");
+  } finally {
+    setExporting(false);
+  }
+};
+
   useEffect(() => {
     (async () => {
       await Promise.all([loadCategories(), loadStats()]);
@@ -176,8 +218,10 @@ export default function InventoryPanel({
       setDeleteOpen(false);
       setDeleteItem(null);
       await refreshAll();
+      showToast("Item removido com sucesso!");
     } catch {
       setDeleteOpen(false);
+      showToast("Erro ao remover item.", "error");
     } finally {
       setDeleteBusy(false);
     }
@@ -186,7 +230,7 @@ export default function InventoryPanel({
   if (loading) {
     return (
       <div className="rounded-2xl bg-white/5 border border-white/10 p-6 text-white/60">
-        Carregando inventário…
+        Carregando inventario...
       </div>
     );
   }
@@ -194,14 +238,23 @@ export default function InventoryPanel({
   return (
     <>
       <div className="max-w-6xl mx-auto px-6 pt-6">
-        <div className="mb-4">
-          <div className="text-2xl font-bold">Visão geral</div>
-          <div className="text-sm text-white/50">Estoque e movimentações</div>
-        </div>
+        <div className="mb-4 flex items-start justify-between gap-4">
+  <div>
+    <div className="text-2xl font-bold">Visão geral</div>
+    <div className="text-sm text-white/50">Estoque e movimentações</div>
+  </div>
+  <button
+    onClick={handleExport}
+    disabled={exporting || categories.length === 0}
+    className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition text-sm disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+  >
+    {exporting ? "Exportando..." : "↓ Exportar CSV"}
+  </button>
+</div>
 
         {statsError && (
           <div className="mb-4 rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-            Erro ao carregar métricas: {statsError}
+            Erro ao carregar metricas: {statsError}
           </div>
         )}
 
@@ -222,12 +275,11 @@ export default function InventoryPanel({
           </div>
         </div>
 
-        {/* Barra de categorias */}
         <div className="rounded-2xl bg-white/5 border border-white/10 p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
           <div>
             <div className="text-sm font-semibold">Categorias</div>
             <div className="text-xs text-white/50">
-              Expanda para ver itens {isAdmin ? "e registrar saída" : "(apenas visualização)"}
+              Expanda para ver itens {isAdmin ? "e registrar saida" : "(apenas visualizacao)"}
             </div>
           </div>
 
@@ -241,7 +293,7 @@ export default function InventoryPanel({
             <button
               onClick={refreshAll}
               className="px-4 py-2.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition text-sm"
-              title="Recarregar inventário"
+              title="Recarregar inventario"
             >
               ↻
             </button>
@@ -260,18 +312,17 @@ export default function InventoryPanel({
                     <div className="h-9 w-9 rounded-xl bg-[rgb(var(--brand))]/12 border border-[rgb(var(--brand))]/20 flex items-center justify-center text-[rgb(var(--brand))]">
                       ▣
                     </div>
-
                     <div>
                       <div className="font-semibold">{c.name}</div>
                       <div className="text-xs text-white/50">
-                        {c.item_count} {plural(c.item_count, "item", "itens")} • {c.total_quantity} {plural(c.total_quantity, "unidade", "unidades")}
+                        {c.item_count} {plural(c.item_count, "item", "itens")} &bull; {c.total_quantity} {plural(c.total_quantity, "unidade", "unidades")}
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
                     <span className="text-xs px-2 py-1 rounded-full bg-white/6 border border-white/10 text-white/70">
-                      {c.total_quantity} {plural(c.total_quantity, "un", "un")}
+                      {c.total_quantity} un
                     </span>
                     <div className="text-sm text-white/60">{c.expanded ? "▲" : "▼"}</div>
                   </div>
@@ -281,7 +332,6 @@ export default function InventoryPanel({
                   <button
                     onClick={() => openCreate(c)}
                     className="ml-3 px-3 py-2 rounded-xl bg-[rgb(var(--brand))]/20 border border-[rgb(var(--brand))]/30 text-[rgb(var(--brand))] hover:bg-[rgb(var(--brand))]/28 transition text-sm font-semibold"
-                    title="Adicionar item"
                   >
                     + Adicionar
                   </button>
@@ -300,9 +350,9 @@ export default function InventoryPanel({
                             <th className="text-left px-5 py-3 font-medium">Marca</th>
                             <th className="text-left px-5 py-3 font-medium">Modelo</th>
                             <th className="text-left px-5 py-3 font-medium">Tipo</th>
-                            <th className="text-left px-5 py-3 font-medium">Condição</th>
+                            <th className="text-left px-5 py-3 font-medium">Condicao</th>
                             <th className="text-left px-5 py-3 font-medium">Qtd</th>
-                            <th className="text-left px-5 py-3 font-medium">Ações</th>
+                            <th className="text-left px-5 py-3 font-medium">Acoes</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -312,13 +362,7 @@ export default function InventoryPanel({
                               <td className="px-5 py-3">{it.model}</td>
                               <td className="px-5 py-3 text-white/70">{it.type}</td>
                               <td className="px-5 py-3">
-                                <span
-                                  className={`px-2 py-1 rounded-full text-xs border ${
-                                    it.condition === "Novo"
-                                      ? "bg-[rgb(var(--brand))]/12 border-[rgb(var(--brand))]/25 text-[rgb(var(--brand))]"
-                                      : "bg-amber-500/10 border-amber-500/25 text-amber-200"
-                                  }`}
-                                >
+                                <span className={`px-2 py-1 rounded-full text-xs border ${it.condition === "Novo" ? "bg-[rgb(var(--brand))]/12 border-[rgb(var(--brand))]/25 text-[rgb(var(--brand))]" : "bg-amber-500/10 border-amber-500/25 text-amber-200"}`}>
                                   {it.condition}
                                 </span>
                               </td>
@@ -330,7 +374,7 @@ export default function InventoryPanel({
                                       onClick={() => { setSaidaItem(it); setSaidaOpen(true); }}
                                       className="px-3 py-1.5 rounded-lg bg-orange-500/15 border border-orange-500/30 text-orange-200 hover:bg-orange-500/25 transition text-xs"
                                     >
-                                      Saída
+                                      Saida
                                     </button>
                                   )}
                                   {isAdmin && (
@@ -350,7 +394,7 @@ export default function InventoryPanel({
                                     </>
                                   )}
                                   {!isAdmin && (
-                                    <span className="text-xs text-white/40">Somente visualização</span>
+                                    <span className="text-xs text-white/40">Somente visualizacao</span>
                                   )}
                                 </div>
                               </td>
@@ -363,7 +407,7 @@ export default function InventoryPanel({
 
                   {!isAdmin && (
                     <div className="px-5 py-4 text-xs text-white/40">
-                      Você está como usuário. Funções administrativas ficam disponíveis apenas para Admin.
+                      Voce esta como usuario. Funcoes administrativas ficam disponiveis apenas para Admin.
                     </div>
                   )}
                 </div>
@@ -378,7 +422,7 @@ export default function InventoryPanel({
         onClose={() => setSaidaOpen(false)}
         item={saidaItem}
         token={token}
-        onSuccess={refreshAll}
+        onSuccess={() => { refreshAll(); showToast("Saida registrada com sucesso!"); }}
       />
 
       <ItemUpsertModal
@@ -390,18 +434,21 @@ export default function InventoryPanel({
         initialItem={editingItem}
         onClose={() => setUpsertOpen(false)}
         onSuccess={refreshAll}
+        onToast={showToast}
       />
 
       <ConfirmModal
         open={deleteOpen}
         title="Remover item?"
-        description="Essa ação remove o item do inventário. (O log é registrado.)"
+        description="Essa acao remove o item do inventario. (O log e registrado.)"
         confirmText="Remover"
         danger
         busy={deleteBusy}
         onCancel={() => setDeleteOpen(false)}
         onConfirm={doDelete}
       />
+
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </>
   );
 }

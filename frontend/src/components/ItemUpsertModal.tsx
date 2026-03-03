@@ -20,6 +20,7 @@ export default function ItemUpsertModal({
   initialItem,
   onClose,
   onSuccess,
+  onToast,
 }: {
   open: boolean;
   mode: "create" | "edit";
@@ -29,6 +30,7 @@ export default function ItemUpsertModal({
   initialItem?: Item | null;
   onClose: () => void;
   onSuccess: () => void;
+  onToast?: (message: string, type?: "success" | "error" | "info") => void;
 }) {
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
@@ -62,8 +64,8 @@ export default function ItemUpsertModal({
   const save = async () => {
     setErr(null);
 
-    if (!brand.trim()) return setErr("Marca é obrigatória.");
-    if (quantity <= 0) return setErr("Quantidade inválida.");
+    if (!brand.trim()) return setErr("Marca e obrigatoria.");
+    if (quantity <= 0) return setErr("Quantidade invalida.");
 
     setBusy(true);
     try {
@@ -71,22 +73,17 @@ export default function ItemUpsertModal({
         await apiFetch("/items", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            category_id: categoryId,
-            brand,
-            model,
-            type,
-            condition,
-            quantity,
-          }),
+          body: JSON.stringify({ category_id: categoryId, brand, model, type, condition, quantity }),
         });
+        onToast?.("Item adicionado com sucesso!");
       } else {
-        if (!initialItem?.id) throw new Error("Item inválido para edição");
+        if (!initialItem?.id) throw new Error("Item invalido para edicao");
         await apiFetch(`/items/${initialItem.id}`, {
           method: "PUT",
           headers: { Authorization: `Bearer ${token}` },
           body: JSON.stringify({ brand, model, type, condition, quantity }),
         });
+        onToast?.("Item atualizado com sucesso!");
       }
 
       onSuccess();
@@ -126,7 +123,6 @@ export default function ItemUpsertModal({
                 placeholder="Ex: Dell"
               />
             </Field>
-
             <Field label="Modelo">
               <input
                 value={model}
@@ -149,8 +145,7 @@ export default function ItemUpsertModal({
                 <option className="bg-zinc-900 text-white" value="N/A">N/A</option>
               </select>
             </Field>
-
-            <Field label="Condição *">
+            <Field label="Condicao *">
               <select
                 value={condition}
                 onChange={(e) => setCondition(e.target.value as any)}
