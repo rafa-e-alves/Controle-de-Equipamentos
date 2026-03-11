@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../lib/api";
+import { useModalLock } from "../lib/useModalLock";
+import { CustomSelect } from "../components/PortalDropdown";
 
 type User = {
   id: number;
@@ -10,27 +12,59 @@ type User = {
   active: number;
 };
 
-type FormErrors = {
-  username?: string;
-  name?: string;
-  password?: string;
-};
+type FormErrors = { username?: string; name?: string; password?: string };
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div><div className="text-xs text-white/50 mb-1">{label}</div>{children}</div>;
+}
+
+function Input({ label, value, onChange, type = "text", error, onKeyDown }: {
+  label: string; value: string; onChange: (v: string) => void;
+  type?: string; error?: string; onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <div>
+      <div className="text-xs text-white/50 mb-1">{label}</div>
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown}
+        className={`w-full px-4 py-2.5 rounded-xl bg-white/5 border focus:outline-none transition
+          ${error ? "border-red-500/70 focus:ring-2 focus:ring-red-500/40" : "border-white/10 focus:ring-2 focus:ring-[rgb(var(--brand))]/40"}`} />
+      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
+    </div>
+  );
+}
+
+function Modal({ title, onClose, children, open }: { title: string; onClose: () => void; children: React.ReactNode; open: boolean }) {
+  useModalLock(open);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-sm p-4"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-zinc-950/90 shadow-2xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="font-semibold">{title}</div>
+          <button onClick={onClose}
+            className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/80 text-xs hover:bg-white/10 transition">
+            Fechar
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default function AdminUsers({ token }: { token: string }) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDisabled, setShowDisabled] = useState(true);
 
-  // Create
   const [form, setForm] = useState({ username: "", name: "", role: "user", password: "" });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
-  // Edit modal
   const [editOpen, setEditOpen] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({ username: "", name: "", role: "user" });
 
-  // Reset pass modal
   const [passOpen, setPassOpen] = useState(false);
   const [passUser, setPassUser] = useState<User | null>(null);
   const [newPass, setNewPass] = useState("");
@@ -39,9 +73,7 @@ export default function AdminUsers({ token }: { token: string }) {
     setLoading(true);
     try {
       const activeParam = includeDisabled ? "all" : "1";
-      const data = await apiFetch(`/users?active=${activeParam}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const data = await apiFetch(`/users?active=${activeParam}`, { headers: { Authorization: `Bearer ${token}` } });
       setUsers(Array.isArray(data) ? data : []);
     } finally {
       setLoading(false);
@@ -51,55 +83,46 @@ export default function AdminUsers({ token }: { token: string }) {
   useEffect(() => { loadUsers(); }, []);
   useEffect(() => { loadUsers(showDisabled); }, [showDisabled]);
 
-  // Create
   const createUser = async () => {
     const errors: FormErrors = {};
     if (!form.username.trim()) errors.username = "Usuário é obrigatório.";
     if (!form.name.trim()) errors.name = "Nome é obrigatório.";
     if (!form.password.trim()) errors.password = "Senha é obrigatória.";
     else if (form.password.trim().length < 4) errors.password = "Mínimo 4 caracteres.";
-
     setFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
-
     await apiFetch("/users", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: JSON.stringify(form),
     });
-
     setForm({ username: "", name: "", role: "user", password: "" });
     setFormErrors({});
     loadUsers();
   };
 
-  // Disable / Enable
   const disableUser = async (u: User) => {
-    const ok = confirm(`Certeza que deseja desativar o usuário "${u.username}"? \nO mesmo não terá mais acesso ao sistema.`);
-    if (!ok) return;
+    if (!confirm(`Desativar "${u.username}"?`)) return;
     await apiFetch(`/users/${u.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
     loadUsers();
   };
 
   const enableUser = async (u: User) => {
-    const ok = confirm(`Deseja reativar o usuário "${u.username}"?`);
-    if (!ok) return;
+    if (!confirm(`Reativar "${u.username}"?`)) return;
     await apiFetch(`/users/${u.id}/enable`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
     loadUsers();
   };
 
   const hardDeleteUser = async (u: User) => {
-    const ok = confirm(`Certeza que deseja excluir DEFINITIVAMENTE o usuário "${u.username}"?\n\nA exclusão só será realizada caso o usuário não possua logs registradas no sistema.`);
-    if (!ok) return;
+    if (!confirm(`Excluir DEFINITIVAMENTE "${u.username}"?\n\nSó é possível se não tiver logs.`)) return;
     try {
       await apiFetch(`/users/${u.id}/hard`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       loadUsers();
     } catch {
-      alert(`Por segurança não é possível excluir o usuário "${u.username}".\n\nO mesmo possui logs registradas no sistema.`);
+      alert(`Não é possível excluir "${u.username}" — possui logs registradas.`);
     }
   };
 
-  // Edit
   const openEdit = (u: User) => {
     setEditUser(u);
     setEditForm({ username: u.username, name: u.name, role: u.role });
@@ -108,10 +131,7 @@ export default function AdminUsers({ token }: { token: string }) {
 
   const saveEdit = async () => {
     if (!editUser) return;
-    if (!editForm.username.trim() || !editForm.name.trim()) {
-      alert("Usuário e Nome são obrigatórios.");
-      return;
-    }
+    if (!editForm.username.trim() || !editForm.name.trim()) { alert("Usuário e Nome são obrigatórios."); return; }
     await apiFetch(`/users/${editUser.id}`, {
       method: "PUT",
       headers: { Authorization: `Bearer ${token}` },
@@ -122,19 +142,11 @@ export default function AdminUsers({ token }: { token: string }) {
     loadUsers();
   };
 
-  // Reset password
-  const openResetPass = (u: User) => {
-    setPassUser(u);
-    setNewPass("");
-    setPassOpen(true);
-  };
+  const openResetPass = (u: User) => { setPassUser(u); setNewPass(""); setPassOpen(true); };
 
   const saveResetPass = async () => {
     if (!passUser) return;
-    if (!newPass.trim() || newPass.trim().length < 4) {
-      alert("Senha inválida (mínimo 4 caracteres).");
-      return;
-    }
+    if (!newPass.trim() || newPass.trim().length < 4) { alert("Senha inválida (mínimo 4 caracteres)."); return; }
     await apiFetch(`/users/${passUser.id}/reset-password`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
@@ -149,33 +161,22 @@ export default function AdminUsers({ token }: { token: string }) {
       <div className="mb-6 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Usuários</h1>
-          <p className="text-sm text-white/50">
-            Crie, edite, resete senha, desative/reative e exclua usuários (com segurança)
-          </p>
+          <p className="text-sm text-white/50">Crie, edite, resete senha, desative/reative e exclua usuários</p>
         </div>
-
         <div className="flex gap-2 items-center">
-          <label className="flex items-center gap-2 text-sm text-white/70 select-none">
-            <input
-              type="checkbox"
-              checked={showDisabled}
-              onChange={(e) => setShowDisabled(e.target.checked)}
-              className="accent-[rgb(var(--brand))]"
-            />
+          <label className="flex items-center gap-2 text-sm text-white/70 select-none cursor-pointer">
+            <input type="checkbox" checked={showDisabled} onChange={(e) => setShowDisabled(e.target.checked)}
+              className="accent-[rgb(var(--brand))]" />
             Mostrar desativados
           </label>
-
-          <button
-            onClick={() => loadUsers()}
-            className="px-4 py-2.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition text-sm"
-          >
+          <button onClick={() => loadUsers()}
+            className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition text-sm">
             Atualizar
           </button>
         </div>
       </div>
 
       <div className="grid md:grid-cols-3 gap-5">
-        {/* Lista */}
         <div className="md:col-span-2 rounded-2xl border border-white/10 bg-white/5 overflow-x-auto">
           {loading ? (
             <div className="p-6 text-white/50">Carregando usuários…</div>
@@ -209,24 +210,19 @@ export default function AdminUsers({ token }: { token: string }) {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
-                          <button onClick={() => openEdit(u)} className="px-3 py-1.5 rounded-lg bg-white/6 border border-white/10 text-white/80 text-xs hover:bg-white/10">
-                            Editar
-                          </button>
-                          <button onClick={() => openResetPass(u)} className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-200 text-xs hover:bg-amber-500/20">
-                            Senha
-                          </button>
+                          <button onClick={() => openEdit(u)}
+                            className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/80 text-xs hover:bg-white/10 transition">Editar</button>
+                          <button onClick={() => openResetPass(u)}
+                            className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-200 text-xs hover:bg-amber-500/20 transition">Senha</button>
                           {isActive ? (
-                            <button onClick={() => disableUser(u)} className="px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-200 text-xs hover:bg-red-500/25">
-                              Desativar
-                            </button>
+                            <button onClick={() => disableUser(u)}
+                              className="px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-200 text-xs hover:bg-red-500/25 transition">Desativar</button>
                           ) : (
                             <>
-                              <button onClick={() => enableUser(u)} className="px-3 py-1.5 rounded-lg bg-[rgb(var(--brand))]/20 border border-[rgb(var(--brand))]/30 text-[rgb(var(--brand))] text-xs hover:bg-[rgb(var(--brand))]/28">
-                                Reativar
-                              </button>
-                              <button onClick={() => hardDeleteUser(u)} className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/35 text-red-200 text-xs hover:bg-red-500/30" title="Exclui definitivamente (apenas se não tiver logs)">
-                                Excluir
-                              </button>
+                              <button onClick={() => enableUser(u)}
+                                className="px-3 py-1.5 rounded-lg bg-[rgb(var(--brand))]/20 border border-[rgb(var(--brand))]/30 text-[rgb(var(--brand))] text-xs hover:bg-[rgb(var(--brand))]/28 transition">Reativar</button>
+                              <button onClick={() => hardDeleteUser(u)}
+                                className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/35 text-red-200 text-xs hover:bg-red-500/30 transition">Excluir</button>
                             </>
                           )}
                         </div>
@@ -235,175 +231,66 @@ export default function AdminUsers({ token }: { token: string }) {
                   );
                 })}
                 {users.length === 0 && (
-                  <tr>
-                    <td className="px-4 py-6 text-white/50" colSpan={6}>Nenhum usuário para exibir.</td>
-                  </tr>
+                  <tr><td className="px-4 py-6 text-white/50" colSpan={6}>Nenhum usuário para exibir.</td></tr>
                 )}
               </tbody>
             </table>
           )}
         </div>
 
-        {/* Form Criar */}
         <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
           <h2 className="font-semibold mb-4">Criar usuário</h2>
           <div className="space-y-3">
-            <Input
-              label="Usuário"
-              value={form.username}
+            <Input label="Usuário" value={form.username} error={formErrors.username}
               onChange={(v) => { setForm({ ...form, username: v }); setFormErrors((e) => ({ ...e, username: undefined })); }}
-              onKeyDown={(e) => e.key === "Enter" && createUser()}
-              error={formErrors.username}
-            />
-            <Input
-              label="Nome"
-              value={form.name}
+              onKeyDown={(e) => e.key === "Enter" && createUser()} />
+            <Input label="Nome" value={form.name} error={formErrors.name}
               onChange={(v) => { setForm({ ...form, name: v }); setFormErrors((e) => ({ ...e, name: undefined })); }}
-              onKeyDown={(e) => e.key === "Enter" && createUser()}
-              error={formErrors.name}
-            />
-            <div>
-              <div className="text-xs text-white/50 mb-1">Perfil</div>
-              <select
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl bg-white/5 text-white border border-white/10 focus:outline-none"
-              >
-                <option className="bg-zinc-900 text-white" value="user">Usuário</option>
-                <option className="bg-zinc-900 text-white" value="admin">Admin</option>
-              </select>
-            </div>
-            <Input
-              label="Senha"
-              type="password"
-              value={form.password}
+              onKeyDown={(e) => e.key === "Enter" && createUser()} />
+            <Field label="Perfil">
+              <CustomSelect value={form.role === "admin" ? "Admin" : "Usuário"}
+                onChange={(v) => setForm({ ...form, role: v === "Admin" ? "admin" : "user" })}
+                options={["Usuário", "Admin"]} />
+            </Field>
+            <Input label="Senha" type="password" value={form.password} error={formErrors.password}
               onChange={(v) => { setForm({ ...form, password: v }); setFormErrors((e) => ({ ...e, password: undefined })); }}
-              error={formErrors.password}
-              onKeyDown={(e) => e.key === "Enter" && createUser()}
-            />
-            <button
-              onClick={createUser}
-              className="w-full px-4 py-2.5 rounded-xl bg-[rgb(var(--brand))]/25 border border-[rgb(var(--brand))]/40 text-sm font-semibold hover:bg-[rgb(var(--brand))]/32 transition"
-            >
+              onKeyDown={(e) => e.key === "Enter" && createUser()} />
+            <button onClick={createUser}
+              className="w-full px-4 py-2.5 rounded-xl bg-[rgb(var(--brand))]/25 border border-[rgb(var(--brand))]/40 text-sm font-semibold hover:bg-[rgb(var(--brand))]/32 transition">
               Criar
             </button>
-            <p className="text-xs text-white/40 pt-2">
-              Para a exclusão de um usuário, primeiro é necessário desativá-lo.
-            </p>
+            <p className="text-xs text-white/40 pt-1">Para excluir um usuário, primeiro é necessário desativá-lo.</p>
           </div>
         </div>
       </div>
 
-      {/* Modal Edit */}
-      {editOpen && editUser && (
-        <Modal title={`Editar: ${editUser.username}`} onClose={() => setEditOpen(false)}>
-          <div className="space-y-3">
-            <Input label="Usuário" value={editForm.username} onChange={(v) => setEditForm({ ...editForm, username: v })} />
-            <Input label="Nome" value={editForm.name} onChange={(v) => setEditForm({ ...editForm, name: v })} />
-            <div>
-              <div className="text-xs text-white/50 mb-1">Role</div>
-              <select
-                value={editForm.role}
-                onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl bg-white/5 text-white border border-white/10 focus:outline-none"
-              >
-                <option className="bg-zinc-900 text-white" value="user">Usuário</option>
-                <option className="bg-zinc-900 text-white" value="admin">Admin</option>
-              </select>
-            </div>
-            <button
-              onClick={saveEdit}
-              className="w-full px-4 py-2.5 rounded-xl bg-[rgb(var(--brand))]/25 border border-[rgb(var(--brand))]/40 text-sm font-semibold hover:bg-[rgb(var(--brand))]/32 transition"
-            >
-              Salvar
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Modal Reset Password */}
-      {passOpen && passUser && (
-        <Modal title={`Resetar senha: ${passUser.username}`} onClose={() => setPassOpen(false)}>
-          <div className="space-y-3">
-            <Input
-              label="Nova senha"
-              type="password"
-              value={newPass}
-              onChange={(v) => setNewPass(v)}
-              onKeyDown={(e) => e.key === "Enter" && saveResetPass()}
-            />
-            <button
-              onClick={saveResetPass}
-              className="w-full px-4 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-100 text-sm font-semibold hover:bg-amber-500/25 transition"
-            >
-              Atualizar senha
-            </button>
-            <p className="text-xs text-white/40">
-              Lembre-se de informar o usuário a nova senha.
-            </p>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-function Input({
-  label,
-  value,
-  onChange,
-  type = "text",
-  error,
-  onKeyDown,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-  error?: string;
-  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-}) {
-  return (
-    <div>
-      <div className="text-xs text-white/50 mb-1">{label}</div>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={onKeyDown}
-        className={`w-full px-4 py-2.5 rounded-xl bg-white/5 border focus:outline-none transition ${error
-            ? "border-red-500/70 focus:ring-2 focus:ring-red-500/40"
-            : "border-white/10 focus:ring-2 focus:ring-[rgb(var(--brand))]/40"
-          }`}
-      />
-      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
-    </div>
-  );
-}
-
-function Modal({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: any;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0b0f0c] p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="font-semibold">{title}</div>
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 rounded-lg bg-white/6 border border-white/10 text-white/80 text-xs hover:bg-white/10"
-          >
-            Fechar
+      <Modal title={editUser ? `Editar: ${editUser.username}` : ""} onClose={() => setEditOpen(false)} open={editOpen}>
+        <div className="space-y-3">
+          <Input label="Usuário" value={editForm.username} onChange={(v) => setEditForm({ ...editForm, username: v })} />
+          <Input label="Nome" value={editForm.name} onChange={(v) => setEditForm({ ...editForm, name: v })} />
+          <Field label="Perfil">
+            <CustomSelect value={editForm.role === "admin" ? "Admin" : "Usuário"}
+              onChange={(v) => setEditForm({ ...editForm, role: v === "Admin" ? "admin" : "user" })}
+              options={["Usuário", "Admin"]} />
+          </Field>
+          <button onClick={saveEdit}
+            className="w-full px-4 py-2.5 rounded-xl bg-[rgb(var(--brand))]/25 border border-[rgb(var(--brand))]/40 text-sm font-semibold hover:bg-[rgb(var(--brand))]/32 transition">
+            Salvar
           </button>
         </div>
-        {children}
-      </div>
+      </Modal>
+
+      <Modal title={passUser ? `Resetar senha: ${passUser.username}` : ""} onClose={() => setPassOpen(false)} open={passOpen}>
+        <div className="space-y-3">
+          <Input label="Nova senha" type="password" value={newPass} onChange={(v) => setNewPass(v)}
+            onKeyDown={(e) => e.key === "Enter" && saveResetPass()} />
+          <button onClick={saveResetPass}
+            className="w-full px-4 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-100 text-sm font-semibold hover:bg-amber-500/25 transition">
+            Atualizar senha
+          </button>
+          <p className="text-xs text-white/40">Lembre-se de informar ao usuário a nova senha.</p>
+        </div>
+      </Modal>
     </div>
   );
 }

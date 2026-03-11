@@ -10,32 +10,15 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-// Log compatível com logs schema NOT NULL (action_type, user_name, item_brand, item_model, quantity)
 function writeSystemLog(db, { actionType, actorName, actorId, categoryId, details }) {
   return new Promise((resolve) => {
     db.run(
       `INSERT INTO logs (
-        action_type,
-        user_name,
-        user_id,
-        item_id,
-        category_id,
-        item_brand,
-        item_model,
-        quantity,
-        details
+        action_type, user_name, user_id, item_id, category_id,
+        item_brand, item_model, quantity, details
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        actionType,
-        actorName || "Sistema",
-        actorId ?? null,
-        null,
-        categoryId ?? null,
-        "SISTEMA",
-        "CATEGORIAS",
-        0,
-        details || "",
-      ],
+      [actionType, actorName || "Sistema", actorId ?? null, null, categoryId ?? null,
+        "SISTEMA", "CATEGORIAS", 0, details || ""],
       (err) => {
         if (err) console.error("Erro ao gravar log (categories):", err.message);
         resolve();
@@ -44,15 +27,11 @@ function writeSystemLog(db, { actionType, actorName, actorId, categoryId, detail
   });
 }
 
-/**
- * GET /api/categories
- */
+// GET /api/categories
 router.get("/categories", requireAuth, (req, res) => {
   const db = req.db;
   const sql = `
-    SELECT
-      c.id,
-      c.name,
+    SELECT c.id, c.name,
       COUNT(i.id) AS item_count,
       COALESCE(SUM(i.quantity), 0) AS total_quantity
     FROM categories c
@@ -66,9 +45,7 @@ router.get("/categories", requireAuth, (req, res) => {
   });
 });
 
-/**
- * GET /api/categories/:id/items
- */
+// GET /api/categories/:id/items
 router.get("/categories/:id/items", requireAuth, (req, res) => {
   const db = req.db;
   const categoryId = Number(req.params.id);
@@ -76,8 +53,7 @@ router.get("/categories/:id/items", requireAuth, (req, res) => {
 
   db.all(
     `SELECT id, category_id, brand, model, type, condition, quantity, location, notes
-     FROM items
-     WHERE category_id = ?
+     FROM items WHERE category_id = ?
      ORDER BY brand COLLATE NOCASE ASC, model COLLATE NOCASE ASC`,
     [categoryId],
     (err, rows) => {
@@ -87,39 +63,36 @@ router.get("/categories/:id/items", requireAuth, (req, res) => {
   );
 });
 
-/**
- * POST /api/categories  (ADMIN)
- */
+// POST /api/categories (ADMIN)
 router.post("/categories", requireAuth, requireAdmin, (req, res) => {
   const db = req.db;
   const name = String(req.body?.name || "").trim();
   if (!name) return res.status(400).json({ error: "Nome requerido" });
 
-  db.run("INSERT INTO categories (name) VALUES (?)", [name], async function (err) {
-    if (err) {
-      if (String(err.message).toUpperCase().includes("UNIQUE")) {
-        return res.status(400).json({ error: "Categoria já existe" });
-      }
-      return res.status(500).json({ error: "Erro ao criar categoria" });
-    }
+  // Bloqueia duplicata antes de inserir
+  db.get("SELECT id FROM categories WHERE LOWER(name) = LOWER(?)", [name], (err, existing) => {
+    if (err) return res.status(500).json({ error: "Erro ao validar categoria" });
+    if (existing) return res.status(400).json({ error: "Categoria já existe" });
 
-    const newId = this.lastID;
+    db.run("INSERT INTO categories (name) VALUES (?)", [name], async function (err2) {
+      if (err2) return res.status(500).json({ error: "Erro ao criar categoria" });
 
-    await writeSystemLog(db, {
-      actionType: "EDIÇÃO",
-      actorName: req.user?.name,
-      actorId: req.user?.id,
-      categoryId: newId,
-      details: `Criou categoria: ${name}`,
+      const newId = this.lastID;
+
+      await writeSystemLog(db, {
+        actionType: "ENTRADA",
+        actorName: req.user?.name,
+        actorId: req.user?.id,
+        categoryId: newId,
+        details: `Criou categoria: ${name}`,
+      });
+
+      res.json({ ok: true, id: newId });
     });
-
-    res.json({ ok: true, id: newId });
   });
 });
 
-/**
- * PUT /api/categories/:id  (ADMIN)  ✅ RENOMEAR
- */
+// PUT /api/categories/:id (ADMIN) — renomear
 router.put("/categories/:id", requireAuth, requireAdmin, (req, res) => {
   const db = req.db;
   const categoryId = Number(req.params.id);
@@ -132,7 +105,6 @@ router.put("/categories/:id", requireAuth, requireAdmin, (req, res) => {
     if (err) return res.status(500).json({ error: "Erro ao buscar categoria" });
     if (!cat) return res.status(404).json({ error: "Categoria não encontrada" });
 
-    // Checa duplicado (case-insensitive)
     db.get(
       "SELECT id FROM categories WHERE LOWER(name) = LOWER(?) AND id <> ?",
       [newName, categoryId],
@@ -158,9 +130,7 @@ router.put("/categories/:id", requireAuth, requireAdmin, (req, res) => {
   });
 });
 
-/**
- * DELETE /api/categories/:id (ADMIN) com trava 409 se tiver itens
- */
+// DELETE /api/categories/:id (ADMIN)
 router.delete("/categories/:id", requireAuth, requireAdmin, (req, res) => {
   const db = req.db;
   const categoryId = Number(req.params.id);
@@ -172,11 +142,8 @@ router.delete("/categories/:id", requireAuth, requireAdmin, (req, res) => {
 
     db.get("SELECT COUNT(1) AS total FROM items WHERE category_id = ?", [categoryId], (err2, row) => {
       if (err2) return res.status(500).json({ error: "Erro ao validar categoria" });
-
       if ((row?.total || 0) > 0) {
-        return res.status(409).json({
-          error: "Não é possível remover: existem itens vinculados a esta categoria.",
-        });
+        return res.status(409).json({ error: "Não é possível remover: existem itens vinculados a esta categoria." });
       }
 
       db.run("DELETE FROM categories WHERE id = ?", [categoryId], async (err3) => {

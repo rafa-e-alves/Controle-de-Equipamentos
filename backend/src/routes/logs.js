@@ -13,7 +13,8 @@ router.get('/logs', requireAuth, requireAdmin, async (req, res) => {
     const params = action ? [action, limit] : [limit];
 
     const rows = await all(
-      `SELECT l.*, c.name as category_name
+      `SELECT l.*,
+              COALESCE(c.name, CASE WHEN l.category_id IS NOT NULL THEN 'Categoria removida' ELSE '' END) as category_name
          FROM logs l
     LEFT JOIN categories c ON c.id = l.category_id
          ${where}

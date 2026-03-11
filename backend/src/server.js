@@ -14,6 +14,7 @@ const categoriesRoutes = require("./routes/categories");
 const itemsRoutes = require("./routes/items");
 const logsRoutes = require("./routes/logs");
 const usersRoutes = require("./routes/users");
+const requestsRoutes = require("./routes/requests");
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use("/api", categoriesRoutes);
 app.use("/api", itemsRoutes);
 app.use("/api", logsRoutes);
 app.use("/api/users", usersRoutes);
+app.use("/api", requestsRoutes);
 
 // Fallback
 app.use((req, res) => res.status(404).json({ error: "Not found" }));

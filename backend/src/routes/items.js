@@ -5,7 +5,6 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 const router = express.Router();
 
 async function logAction({ action_type, item_id, category_id, user_name, item_brand, item_model, quantity, condition, reason, details }) {
-  // logs.item_brand / item_model no schema atual são NOT NULL
   const safeBrand = item_brand || '-';
   const safeModel = item_model || '-';
   const safeQty = Number.isFinite(quantity) ? quantity : 0;
@@ -13,11 +12,11 @@ async function logAction({ action_type, item_id, category_id, user_name, item_br
   await run(
     `INSERT INTO logs (action_type, item_id, category_id, user_name, item_brand, item_model, quantity, condition, reason, details)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-
     [action_type, item_id ?? null, category_id ?? null, user_name, safeBrand, safeModel, safeQty, condition ?? null, reason ?? null, details ?? null]
   );
 }
 
+// POST /items — upsert: se já existe item igual, soma a quantidade
 router.post('/items', requireAuth, requireAdmin, async (req, res) => {
   const b = req.body || {};
   const category_id = Number(b.category_id);
@@ -29,8 +28,39 @@ router.post('/items', requireAuth, requireAdmin, async (req, res) => {
 
   if (!category_id) return res.status(400).json({ error: 'category_id é obrigatório' });
   if (!brand) return res.status(400).json({ error: 'brand é obrigatório' });
+  if (!Number.isFinite(quantity) || quantity <= 0) return res.status(400).json({ error: 'Quantidade inválida' });
 
   try {
+    // Verifica se já existe item com mesma combinação
+    const existing = await get(
+      `SELECT * FROM items WHERE category_id=? AND brand=? AND model=? AND type=? AND condition=?`,
+      [category_id, brand, model, type, condition]
+    );
+
+    if (existing) {
+      // Soma a quantidade no item existente
+      const newQty = existing.quantity + quantity;
+      await run(
+        `UPDATE items SET quantity=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        [newQty, existing.id]
+      );
+
+      await logAction({
+        action_type: 'ENTRADA',
+        item_id: existing.id,
+        category_id,
+        user_name: req.user?.name || req.user?.username || 'Usuário',
+        item_brand: brand,
+        item_model: model || '-',
+        quantity,
+        condition,
+        details: `Adicionado mais ${quantity} unidade(s) do item no estoque. ${existing.quantity} -> ${newQty}`
+      });
+
+      return res.status(200).json({ id: existing.id, merged: true });
+    }
+
+    // Cria novo item
     const r = await run(
       `INSERT INTO items (category_id, brand, model, type, condition, quantity)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -49,7 +79,7 @@ router.post('/items', requireAuth, requireAdmin, async (req, res) => {
       details: 'Item adicionado ao estoque'
     });
 
-    return res.status(201).json({ id: r.lastID });
+    return res.status(201).json({ id: r.lastID, merged: false });
   } catch (e) {
     console.error('create item error', e);
     return res.status(500).json({ error: 'Erro ao criar item' });
@@ -84,7 +114,7 @@ router.put('/items/:id', requireAuth, requireAdmin, async (req, res) => {
       item_model: model || '-',
       quantity,
       condition,
-      details: `Antes: ${before.brand} ${before.model || ''}\n (${before.condition} - Quantidade antiga ${before.quantity})`
+      details: `Antes: ${before.brand} ${before.model || ''} (${before.condition} - Quantidade antiga ${before.quantity})`
     });
 
     return res.json({ ok: true });
@@ -120,13 +150,47 @@ router.post('/items/:id/saida', requireAuth, requireAdmin, async (req, res) => {
       quantity: qty,
       condition: item.condition,
       reason,
-      details: `Saída de ${item.quantity} unidade(s). Motivo: ${reason} \n ${item.quantity} -> ${newQty}`
+      details: `Saída de ${qty} unidade(s). Motivo: ${reason}. ${item.quantity} -> ${newQty}`
     });
 
     return res.json({ ok: true, newQuantity: newQty });
   } catch (e) {
     console.error('saida error', e);
     return res.status(500).json({ error: 'Erro ao registrar saída' });
+  }
+});
+
+
+// POST /items/:id/repor — adiciona quantidade e loga como ENTRADA
+router.post('/items/:id/repor', requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const qty = Number(req.body?.quantity || 1);
+
+  if (!Number.isFinite(qty) || qty <= 0) return res.status(400).json({ error: 'Quantidade inválida' });
+
+  try {
+    const item = await get('SELECT * FROM items WHERE id = ?', [id]);
+    if (!item) return res.status(404).json({ error: 'Item não encontrado' });
+
+    const newQty = item.quantity + qty;
+    await run('UPDATE items SET quantity=?, updated_at=CURRENT_TIMESTAMP WHERE id=?', [newQty, id]);
+
+    await logAction({
+      action_type: 'ENTRADA',
+      item_id: id,
+      category_id: item.category_id,
+      user_name: req.user?.name || req.user?.username || 'Usuário',
+      item_brand: item.brand,
+      item_model: item.model || '-',
+      quantity: qty,
+      condition: item.condition,
+      details: `Reposição de ${qty} unidade(s) do item no estoque. ${item.quantity} -> ${newQty}`
+    });
+
+    return res.json({ ok: true, newQuantity: newQty });
+  } catch (e) {
+    console.error('repor error', e);
+    return res.status(500).json({ error: 'Erro ao repor item' });
   }
 });
 

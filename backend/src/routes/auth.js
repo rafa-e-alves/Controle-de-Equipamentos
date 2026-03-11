@@ -9,7 +9,6 @@ router.post("/login", async (req, res) => {
   try {
     const { username, password } = req.body || {};
 
-    // ⚠️ aqui trocamos password_hash -> password
     const user = await get(
       "SELECT id, username, name, role, password, active FROM users WHERE username = ?",
       [username]
@@ -17,14 +16,13 @@ router.post("/login", async (req, res) => {
 
     if (!user) return res.status(401).json({ error: "Usuário ou senha inválidos" });
 
-    // se você ainda não criou o active, isso evita crash
+    // Usuário desativado — mesma mensagem genérica, sem revelar o motivo
     if (typeof user.active !== "undefined" && Number(user.active) === 0) {
-      return res.status(403).json({ error: "Usuário desativado" });
+      return res.status(401).json({ error: "Usuário ou senha inválidos" });
     }
 
     const dbPass = user.password || "";
 
-    // ✅ compatível com: senha já hash (bcrypt) OU senha antiga em texto puro
     let ok = false;
     if (dbPass.startsWith("$2a$") || dbPass.startsWith("$2b$") || dbPass.startsWith("$2y$")) {
       ok = await bcrypt.compare(password || "", dbPass);
