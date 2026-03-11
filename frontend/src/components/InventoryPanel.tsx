@@ -87,7 +87,6 @@ export default function InventoryPanel({ token, isAdmin, onDataChanged }: { toke
   const [statsError, setStatsError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
-
   // modals
   const [saidaOpen, setSaidaOpen] = useState(false);
   const [saidaItem, setSaidaItem] = useState<Item | null>(null);
@@ -103,7 +102,6 @@ export default function InventoryPanel({ token, isAdmin, onDataChanged }: { toke
   const [requestCategory, setRequestCategory] = useState<Category | null>(null);
   const [reporOpen, setReporOpen] = useState(false);
   const [reporItem, setReporItem] = useState<Item | null>(null);
-
 
   // minhas solicitacoes
   const [myRequests, setMyRequests] = useState<MyRequest[]>([]);
@@ -202,7 +200,6 @@ export default function InventoryPanel({ token, isAdmin, onDataChanged }: { toke
     finally { setDeleteBusy(false); }
   };
 
-
   if (loading) return <div className="rounded-2xl bg-white/5 border border-white/10 p-6 text-white/60">Carregando inventário…</div>;
 
   return (
@@ -213,21 +210,27 @@ export default function InventoryPanel({ token, isAdmin, onDataChanged }: { toke
             <div className="text-2xl font-bold">Visão geral</div>
             <div className="text-sm text-white/50">Estoque e movimentações</div>
           </div>
-          <div className="flex gap-2">
-            {/* Export: sempre visível pro admin, independente do modo */}
-            {isAdmin && (
-              <button onClick={handleExport} disabled={exporting || categories.length === 0}
-                className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition text-sm disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap">
-                {exporting ? "Exportando..." : "↓ Exportar CSV"}
-              </button>
-            )}
-            {/* Minhas solicitações: NUNCA pra admin */}
+          <div className="flex gap-2 items-center">
             {!isAdmin && (
               <button onClick={() => { loadMyRequests(); setMyReqOpen(true); }}
                 className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition text-sm whitespace-nowrap">
                 Minhas solicitações
               </button>
             )}
+            <button onClick={handleExport} disabled={exporting || categories.length === 0}
+              title="Exportar inventário CSV"
+              className="p-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition disabled:opacity-40 disabled:cursor-not-allowed">
+              {exporting ? (
+                <svg className="w-4 h-4 animate-spin text-white/60" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                </svg>
+              )}
+            </button>
           </div>
         </div>
 
@@ -395,7 +398,7 @@ export default function InventoryPanel({ token, isAdmin, onDataChanged }: { toke
                           <div className="text-xs text-white/50">{r.category_name} • {r.quantity} {plural(r.quantity, 'unidade', 'unidades')} • {new Date(r.created_at).toLocaleString('pt-BR')}</div>
                           <div className="text-xs text-white/60 mt-1">{r.reason}</div>
                           {r.admin_note && (
-                            <div className="text-xs text-white/40 mt-1 italic">“{r.admin_note}”</div>
+                            <div className="text-xs text-white/40 mt-1 italic">"{r.admin_note}"</div>
                           )}
                         </div>
                         <span className={`px-2 py-1 rounded-full text-xs border font-semibold whitespace-nowrap ${REQ_STATUS[r.status] || ''}`}>
@@ -423,7 +426,7 @@ export default function InventoryPanel({ token, isAdmin, onDataChanged }: { toke
         onSuccess={() => { showToast('Solicitação enviada!'); loadMyRequests(); }} />
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <ReporModal open={reporOpen} onClose={() => setReporOpen(false)} item={reporItem}
-  token={token} onSuccess={() => { refreshAll(); showToast('Estoque reposto com sucesso!'); }} />
+        token={token} onSuccess={() => { refreshAll(); showToast('Estoque reposto com sucesso!'); }} />
     </>
   );
 }
