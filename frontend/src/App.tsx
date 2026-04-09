@@ -161,7 +161,6 @@ export default function App() {
       ) : (
         <InventoryPanel token={token} isAdmin={isAdmin} />
       )}
-
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );

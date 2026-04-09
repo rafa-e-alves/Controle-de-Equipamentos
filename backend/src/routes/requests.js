@@ -15,16 +15,19 @@ run(`CREATE TABLE IF NOT EXISTS requests (
   category_name TEXT,
   quantity INTEGER NOT NULL DEFAULT 1,
   reason TEXT,
+  extra_info TEXT,
   status TEXT NOT NULL DEFAULT 'PENDENTE',
   admin_note TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`).catch(console.error);
 
+// Migrations
 Promise.all([
   run(`ALTER TABLE requests ADD COLUMN item_brand TEXT`).catch(() => {}),
   run(`ALTER TABLE requests ADD COLUMN item_model TEXT`).catch(() => {}),
-  run(`ALTER TABLE requests ADD COLUMN category_name TEXT`),
+  run(`ALTER TABLE requests ADD COLUMN category_name TEXT`).catch(() => {}),
+  run(`ALTER TABLE requests ADD COLUMN extra_info TEXT`).catch(() => {}),
 ]).catch(() => {});
 
 // POST /requests - usuario cria solicitacao
@@ -33,6 +36,7 @@ router.post('/requests', requireAuth, async (req, res) => {
   const item_id = Number(b.item_id);
   const quantity = Number(b.quantity || 1);
   const reason = (b.reason || '').trim();
+  const extra = b.extra || {};
 
   if (!item_id) return res.status(400).json({ error: 'item_id obrigatorio' });
   if (quantity <= 0) return res.status(400).json({ error: 'Quantidade invalida' });
@@ -47,12 +51,19 @@ router.post('/requests', requireAuth, async (req, res) => {
     if (!item) return res.status(404).json({ error: 'Item nao encontrado' });
     if (quantity > item.quantity) return res.status(400).json({ error: 'Quantidade maior que disponivel em estoque' });
 
+    // Monta extra_info como texto legível
+    const extraParts = [];
+    if (extra.authorizer) extraParts.push(`Gestor: ${extra.authorizer}`);
+    if (extra.justification) extraParts.push(`Justificativa: ${extra.justification}`);
+    if (extra.problem_description) extraParts.push(`Problema: ${extra.problem_description}`);
+    const extra_info = extraParts.length > 0 ? extraParts.join(' | ') : null;
+
     const r = await run(
-      `INSERT INTO requests (item_id, user_id, user_name, item_brand, item_model, category_name, quantity, reason)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO requests (item_id, user_id, user_name, item_brand, item_model, category_name, quantity, reason, extra_info)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [item_id, req.user.id, req.user.name || req.user.username,
        item.brand, item.model || '', item.category_name || '',
-       quantity, reason]
+       quantity, reason, extra_info]
     );
 
     return res.status(201).json({ id: r.lastID });
@@ -127,13 +138,15 @@ router.post('/requests/:id/approve', requireAuth, requireAdmin, async (req, res)
       ['APROVADO', admin_note, id]
     );
 
+    let details = `Retirada de ${req_.user_name} aprovada por ${req.user.name || req.user.username}. ${item.quantity} -> ${newQty}`;
+    if (req_.extra_info) details += ` | ${req_.extra_info}`;
+
     await run(
       `INSERT INTO logs (action_type, item_id, category_id, user_name, item_brand, item_model, quantity, condition, reason, details)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ['SAÍDA', item.id, item.category_id,
        req.user.name || req.user.username, item.brand, item.model || '-',
-       req_.quantity, item.condition, req_.reason,
-       'Retirada de ' + req_.user_name + ' aprovada por ' + (req.user.name || req.user.username) + '. ' + item.quantity + ' -> ' + newQty]
+       req_.quantity, item.condition, req_.reason, details]
     );
 
     return res.json({ ok: true, newQuantity: newQty });

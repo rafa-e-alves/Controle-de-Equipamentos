@@ -15,22 +15,22 @@ type Log = {
 
 const ACTION_STYLES: Record<string, string> = {
   "ENTRADA":  "bg-green-500/15 border-green-500/30 text-green-300",
-  "SA\u00CDDA":   "bg-red-500/15 border-red-500/30 text-red-300",
-  "EDI\u00C7\u00C3O": "bg-amber-500/15 border-amber-500/30 text-amber-300",
-  "EXCLUS\u00C3O": "bg-zinc-500/15 border-zinc-500/30 text-zinc-300",
+  "SAÍDA":    "bg-red-500/15 border-red-500/30 text-red-300",
+  "EDIÇÃO":   "bg-amber-500/15 border-amber-500/30 text-amber-300",
+  "EXCLUSÃO": "bg-zinc-500/15 border-zinc-500/30 text-zinc-300",
 };
 
 const FILTERS = [
-  { key: "all",       label: "Todos" },
-  { key: "ENTRADA",   label: "ENTRADA" },
-  { key: "SA\u00CDDA",    label: "SA\u00CDDA" },
-  { key: "EDI\u00C7\u00C3O",  label: "EDI\u00C7\u00C3O" },
-  { key: "EXCLUS\u00C3O", label: "EXCLUS\u00C3O" },
+  { key: "all",      label: "Todos" },
+  { key: "ENTRADA",  label: "ENTRADA" },
+  { key: "SAÍDA",    label: "SAÍDA" },
+  { key: "EDIÇÃO",   label: "EDIÇÃO" },
+  { key: "EXCLUSÃO", label: "EXCLUSÃO" },
 ];
 
 function exportCSV(logs: Log[]) {
   const escape = (s: string) => (s ?? "").replace(/"/g, "'");
-  const header = ["Data", "Usuario", "Acao", "Marca", "Modelo", "Categoria", "Qtd", "Detalhes"];
+  const header = ["Data", "Usuário", "Ação", "Marca", "Modelo", "Categoria", "Qtd", "Detalhes"];
   const rows = logs.map((l) => [
     new Date(l.created_at).toLocaleString("pt-BR"),
     l.user_name, l.action_type, l.item_brand, l.item_model,
@@ -47,6 +47,48 @@ function exportCSV(logs: Log[]) {
   a.download = `logs_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function DetailCell({ details }: { details: string }) {
+  if (!details) return <span className="text-white/30">—</span>;
+
+  const parts = details.split(" | ");
+  const main = parts[0];
+  const extras = parts.slice(1);
+
+  if (extras.length === 0) {
+    return <span className="text-white/70">{main}</span>;
+  }
+
+  return (
+    <div className="flex items-start gap-2">
+      <span className="text-white/70">{main}</span>
+      <div className="relative group flex-shrink-0 mt-0.5">
+        <div className="w-4 h-4 rounded-full bg-white/10 border border-white/20 flex items-center justify-center cursor-default text-white/50 text-xs font-bold leading-none">
+          +
+        </div>
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:block w-max max-w-xs">
+          <div className="bg-zinc-900 border border-white/15 rounded-xl px-3 py-2.5 shadow-xl space-y-1.5">
+            {extras.map((part, i) => {
+              const colonIdx = part.indexOf(':');
+              if (colonIdx > -1) {
+                const label = part.slice(0, colonIdx).trim();
+                const value = part.slice(colonIdx + 1).trim();
+                return (
+                  <div key={i}>
+                    <div className="text-xs text-white/40">{label}</div>
+                    <div className="text-xs text-white/80">{value}</div>
+                  </div>
+                );
+              }
+              return <div key={i} className="text-xs text-white/70">{part}</div>;
+            })}
+          </div>
+          <div className="w-2 h-2 bg-zinc-900 border-r border-b border-white/15 rotate-45 mx-auto -mt-1" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function AdminLogs({ token }: { token: string }) {
@@ -80,7 +122,7 @@ export default function AdminLogs({ token }: { token: string }) {
   }, [filter]);
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
+    <div className="max-w-7xl mx-auto px-6 py-8">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Logs do Sistema</h1>
@@ -110,38 +152,40 @@ export default function AdminLogs({ token }: { token: string }) {
         ))}
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 overflow-x-auto">
+      <div className="rounded-2xl border border-white/10 bg-white/5 overflow-visible">
         {loading ? (
           <div className="p-6 text-white/50">Carregando logs…</div>
         ) : (
           <table className="w-full text-sm">
             <thead className="border-b border-white/10 text-white/60">
               <tr>
-                <th className="px-4 py-3 text-left">Data</th>
-                <th className="px-4 py-3 text-left">Usuário</th>
-                <th className="px-4 py-3 text-left">Ação</th>
-                <th className="px-4 py-3 text-left">Item</th>
-                <th className="px-4 py-3 text-left">Categoria</th>
-                <th className="px-4 py-3 text-left">Qtd</th>
-                <th className="px-4 py-3 text-left">Detalhes</th>
+                <th className="px-4 py-3 text-left font-medium whitespace-nowrap">Data</th>
+                <th className="px-4 py-3 text-left font-medium whitespace-nowrap">Usuário</th>
+                <th className="px-4 py-3 text-left font-medium whitespace-nowrap">Ação</th>
+                <th className="px-4 py-3 text-left font-medium whitespace-nowrap">Item</th>
+                <th className="px-4 py-3 text-left font-medium whitespace-nowrap">Categoria</th>
+                <th className="px-4 py-3 text-left font-medium whitespace-nowrap">Qtd</th>
+                <th className="px-4 py-3 text-left font-medium">Detalhes</th>
               </tr>
             </thead>
             <tbody>
               {logs.map((l) => (
                 <tr key={l.id} className="border-b border-white/5 hover:bg-white/5">
-                  <td className="px-4 py-3 text-white/60 text-xs whitespace-nowrap">
+                  <td className="px-4 py-3 text-white/60 whitespace-nowrap">
                     {new Date(l.created_at).toLocaleString("pt-BR")}
                   </td>
-                  <td className="px-4 py-3 font-medium">{l.user_name}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 font-medium whitespace-nowrap">{l.user_name}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span className={`px-2 py-1 rounded-full text-xs border font-semibold ${ACTION_STYLES[l.action_type] || "bg-white/5 border-white/10 text-white/70"}`}>
                       {l.action_type}
                     </span>
                   </td>
-                  <td className="px-4 py-3">{l.item_brand} {l.item_model}</td>
-                  <td className="px-4 py-3 text-white/70">{l.category_name}</td>
-                  <td className="px-4 py-3 font-semibold">{l.quantity}</td>
-                  <td className="px-4 py-3 text-white/60">{l.details}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">{l.item_brand} {l.item_model}</td>
+                  <td className="px-4 py-3 text-white/70 whitespace-nowrap">{l.category_name}</td>
+                  <td className="px-4 py-3 font-semibold whitespace-nowrap">{l.quantity}</td>
+                  <td className="px-4 py-3">
+                    <DetailCell details={l.details} />
+                  </td>
                 </tr>
               ))}
               {logs.length === 0 && (

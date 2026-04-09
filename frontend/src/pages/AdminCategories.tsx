@@ -20,7 +20,13 @@ export default function AdminCategories({ token, onToast }: { token: string; onT
   const [confirmTarget, setConfirmTarget] = useState<CategoryRow | null>(null);
   const [removing, setRemoving] = useState(false);
 
-  useModalLock(renameOpen || confirmOpen);
+  // importação em massa
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
+
+  useModalLock(renameOpen || confirmOpen || importOpen);
 
   const load = async () => {
     try {
@@ -62,10 +68,48 @@ export default function AdminCategories({ token, onToast }: { token: string; onT
     }
   };
 
-  const askRemove = (c: CategoryRow) => {
-    setConfirmTarget(c);
-    setConfirmOpen(true);
+  const doImport = async () => {
+    const lines = importText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    if (lines.length === 0) { onToast("Nenhuma categoria para importar.", "error"); return; }
+
+    setImporting(true);
+    setImportProgress({ done: 0, total: lines.length });
+
+    let created = 0;
+    let skipped = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      try {
+        await apiFetch("/categories", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ name: lines[i] }),
+        });
+        created++;
+      } catch {
+        skipped++;
+      }
+      setImportProgress({ done: i + 1, total: lines.length });
+    }
+
+    setImporting(false);
+    setImportProgress(null);
+    setImportOpen(false);
+    setImportText("");
+    await load();
+
+    if (skipped > 0) {
+      onToast(`${created} criadas, ${skipped} ignoradas (já existiam ou erro).`, "info");
+    } else {
+      onToast(`${created} ${created === 1 ? "categoria criada" : "categorias criadas"} com sucesso!`, "success");
+    }
   };
+
+  const askRemove = (c: CategoryRow) => { setConfirmTarget(c); setConfirmOpen(true); };
 
   const doRemove = async () => {
     if (!confirmTarget) return;
@@ -110,6 +154,7 @@ export default function AdminCategories({ token, onToast }: { token: string; onT
     }
   };
 
+  const importLines = importText.split("\n").filter((l) => l.trim().length > 0).length;
   const totalItems = categories.reduce((acc, c) => acc + (c.item_count || 0), 0);
   const totalUnits = categories.reduce((acc, c) => acc + (c.total_quantity || 0), 0);
 
@@ -120,10 +165,16 @@ export default function AdminCategories({ token, onToast }: { token: string; onT
           <div className="text-2xl font-bold">Categorias</div>
           <div className="text-sm text-white/50">Administração de categorias do inventário.</div>
         </div>
-        <button onClick={load}
-          className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition text-sm">
-          Atualizar
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setImportOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition text-sm">
+            Importar
+          </button>
+          <button onClick={load}
+            className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition text-sm">
+            Atualizar
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
@@ -198,12 +249,66 @@ export default function AdminCategories({ token, onToast }: { token: string; onT
             className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-[rgb(var(--brand))]/60 text-sm mb-3"
             placeholder="Digite o nome..." />
           <button onClick={create} disabled={creating || !name.trim()}
-            className="w-full px-4 py-2.5 rounded-xl bg-[rgb(var(--brand))]/25 border border-[rgb(var(--brand))]/40 text-sm font-semibold hover:bg-[rgb(var(--brand))]/32 transition disabled:opacity-50">
+            title={!name.trim() ? "Digite um nome para a categoria" : undefined}
+            className="w-full px-4 py-2.5 rounded-xl bg-[rgb(var(--brand))]/25 border border-[rgb(var(--brand))]/40 text-sm font-semibold hover:bg-[rgb(var(--brand))]/32 transition disabled:opacity-50 disabled:cursor-not-allowed">
             {creating ? "Criando..." : "Criar"}
           </button>
           <div className="mt-3 text-xs text-white/40">Dica: padronize no plural (ex.: "Monitores" em vez de "Monitor").</div>
         </div>
       </div>
+
+      {/* Modal importar em massa */}
+      {importOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-sm p-4"
+          onMouseDown={(e) => { if (e.target === e.currentTarget && !importing) setImportOpen(false); }}>
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950/90 shadow-2xl">
+            <div className="px-5 py-4 border-b border-white/10">
+              <div className="font-semibold">Importar categorias</div>
+              <div className="text-xs text-white/50 mt-0.5">Cole uma categoria por linha.</div>
+            </div>
+            <div className="p-5 space-y-3">
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                disabled={importing}
+                rows={10}
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-[rgb(var(--brand))]/60 text-sm resize-none disabled:opacity-50"
+                placeholder={"Notebooks\nMonitores\nTeclados\nMouses\nTelefonia"} />
+
+              {importProgress && (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs text-white/50">
+                    <span>Criando categorias...</span>
+                    <span>{importProgress.done}/{importProgress.total}</span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full bg-[rgb(var(--brand))] rounded-full transition-all duration-200"
+                      style={{ width: `${(importProgress.done / importProgress.total) * 100}%` }} />
+                  </div>
+                </div>
+              )}
+
+              {!importProgress && (
+                <div className="text-xs text-white/40">
+                  {importLines > 0 ? `${importLines} ${importLines === 1 ? "categoria" : "categorias"} detectadas` : "Nenhuma categoria detectada"}
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => { setImportOpen(false); setImportText(""); }} disabled={importing}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition text-sm disabled:opacity-50">
+                  Cancelar
+                </button>
+                <button onClick={doImport} disabled={importing || importLines === 0}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-[rgb(var(--brand))]/25 border border-[rgb(var(--brand))]/40 text-sm font-semibold hover:bg-[rgb(var(--brand))]/32 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                  {importing ? "Importando..." : `Importar ${importLines > 0 ? importLines : ""}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal renomear */}
       {renameOpen && (

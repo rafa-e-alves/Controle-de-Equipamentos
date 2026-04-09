@@ -25,6 +25,7 @@ type Item = {
   type: string;
   condition: 'Novo' | 'Usado';
   quantity: number;
+  notes?: string;
 };
 
 type Stats = { totalQuantity: number; newItems: number; usedItems: number };
@@ -51,7 +52,7 @@ function plural(n: number, s: string, p: string) { return n === 1 ? s : p; }
 
 async function exportInventoryCSV(token: string, categories: Category[]) {
   const escape = (s: string) => (s ?? "").replace(/"/g, "'");
-  const header = ["Categoria", "Marca", "Modelo", "Tipo", "Condicao", "Quantidade"];
+  const header = ["Categoria", "Marca", "Modelo", "Tipo", "Condição", "Quantidade", "Observações"];
   const rows: string[][] = [];
   for (const cat of categories) {
     let items = cat.items;
@@ -61,7 +62,7 @@ async function exportInventoryCSV(token: string, categories: Category[]) {
       });
     }
     for (const it of items) {
-      rows.push([cat.name, it.brand, it.model, it.type, it.condition, String(it.quantity)]);
+      rows.push([cat.name, it.brand, it.model, it.type, it.condition, String(it.quantity), it.notes || ""]);
     }
   }
   const csvRows = [header, ...rows].map((row) =>
@@ -324,9 +325,25 @@ export default function InventoryPanel({ token, isAdmin, onDataChanged }: { toke
                               <td className="px-5 py-3">{it.model}</td>
                               <td className="px-5 py-3 text-white/70">{it.type}</td>
                               <td className="px-5 py-3">
-                                <span className={`px-2 py-1 rounded-full text-xs border ${it.condition === 'Novo' ? 'bg-[rgb(var(--brand))]/12 border-[rgb(var(--brand))]/25 text-[rgb(var(--brand))]' : 'bg-amber-500/10 border-amber-500/25 text-amber-200'}`}>
-                                  {it.condition}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-2 py-1 rounded-full text-xs border ${it.condition === 'Novo' ? 'bg-[rgb(var(--brand))]/12 border-[rgb(var(--brand))]/25 text-[rgb(var(--brand))]' : 'bg-amber-500/10 border-amber-500/25 text-amber-200'}`}>
+                                    {it.condition}
+                                  </span>
+                                  {it.notes && (
+                                    <div className="relative group flex-shrink-0">
+                                      <svg className="w-4 h-4 text-amber-400 cursor-default" viewBox="0 0 24 24" fill="currentColor">
+                                        <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
+                                      </svg>
+                                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:block w-52">
+                                        <div className="bg-zinc-900 border border-amber-500/30 rounded-xl px-3 py-2 text-xs text-amber-200/90 shadow-xl break-words">
+                                          <div className="font-semibold text-amber-400 mb-0.5">Observação:</div>
+                                          {it.notes}
+                                        </div>
+                                        <div className="w-2 h-2 bg-zinc-900 border-r border-b border-amber-500/30 rotate-45 mx-auto -mt-1" />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                               <td className="px-5 py-3 font-semibold">{it.quantity}</td>
                               <td className="px-5 py-3">
@@ -372,7 +389,7 @@ export default function InventoryPanel({ token, isAdmin, onDataChanged }: { toke
         </div>
       </div>
 
-      {/* Modal Minhas Solicitacoes */}
+      {/* Modal Minhas Solicitações */}
       {myReqOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0b0f0c] overflow-hidden">

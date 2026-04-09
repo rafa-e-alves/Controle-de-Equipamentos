@@ -5,7 +5,7 @@ import { CustomSelect } from "./PortalDropdown";
 
 type Item = {
   id: number; category_id: number; brand: string; model: string;
-  type: string; condition: "Novo" | "Usado"; quantity: number;
+  type: string; condition: "Novo" | "Usado"; quantity: number; notes?: string;
 };
 
 export default function ItemUpsertModal({
@@ -20,6 +20,7 @@ export default function ItemUpsertModal({
   const [type, setType] = useState("N/A");
   const [condition, setCondition] = useState<"Novo" | "Usado">("Novo");
   const [quantity, setQuantity] = useState<number>(1);
+  const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -31,11 +32,14 @@ export default function ItemUpsertModal({
     if (!open) return;
     setErr(null);
     if (mode === "edit" && initialItem) {
-      setBrand(initialItem.brand || ""); setModel(initialItem.model || "");
-      setType(initialItem.type || "N/A"); setCondition(initialItem.condition || "Novo");
+      setBrand(initialItem.brand || "");
+      setModel(initialItem.model || "");
+      setType(initialItem.type || "N/A");
+      setCondition(initialItem.condition || "Novo");
       setQuantity(Number(initialItem.quantity ?? 1));
+      setNotes(initialItem.notes || "");
     } else {
-      setBrand(""); setModel(""); setType("N/A"); setCondition("Novo"); setQuantity(1);
+      setBrand(""); setModel(""); setType("N/A"); setCondition("Novo"); setQuantity(1); setNotes("");
     }
   }, [open, mode, initialItem]);
 
@@ -49,7 +53,7 @@ export default function ItemUpsertModal({
         await apiFetch("/items", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ category_id: categoryId, brand, model, type, condition, quantity }),
+          body: JSON.stringify({ category_id: categoryId, brand, model, type, condition, quantity, notes: notes.trim() || null }),
         });
         onToast?.("Item adicionado com sucesso!");
       } else {
@@ -57,7 +61,7 @@ export default function ItemUpsertModal({
         await apiFetch(`/items/${initialItem.id}`, {
           method: "PUT",
           headers: { Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ brand, model, type, condition, quantity }),
+          body: JSON.stringify({ brand, model, type, condition, quantity, notes: notes.trim() || null }),
         });
         onToast?.("Item atualizado com sucesso!");
       }
@@ -98,6 +102,15 @@ export default function ItemUpsertModal({
           <Field label="Quantidade *">
             <input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value))}
               className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-[rgb(var(--brand))]/60" />
+          </Field>
+          <Field label="Observações">
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              placeholder="Ex: arranhado na tela, parafuso faltando..."
+              className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-[rgb(var(--brand))]/60 resize-none text-sm"
+            />
           </Field>
         </div>
         <div className="p-5 border-t border-white/10 flex gap-3 justify-end">
